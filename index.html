@@ -115,6 +115,13 @@
                 <button onclick="downloadDoc()" class="text-xs text-blue-300 hover:text-blue-200 bg-blue-500/10 border border-blue-500/20 px-3 py-1.5 rounded-lg flex items-center gap-1 transition">
                     <i data-lucide="file-type" class="w-3.5 h-3.5"></i> <span data-i18n="docBtn"></span>
                 </button>
+                <button onclick="downloadBackup()" class="text-xs text-amber-300 hover:text-amber-200 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-lg flex items-center gap-1 transition">
+                    <i data-lucide="download" class="w-3.5 h-3.5"></i> <span data-i18n="backupBtn"></span>
+                </button>
+                <button onclick="document.getElementById('restoreFileInput').click()" class="text-xs text-cyan-300 hover:text-cyan-200 bg-cyan-500/10 border border-cyan-500/20 px-3 py-1.5 rounded-lg flex items-center gap-1 transition">
+                    <i data-lucide="upload" class="w-3.5 h-3.5"></i> <span data-i18n="restoreBtn"></span>
+                </button>
+                <input type="file" id="restoreFileInput" accept="application/json" class="hidden" onchange="restoreBackup(event)">
                 <button onclick="clearData()" class="text-xs text-slate-300 hover:text-white bg-slate-700/30 border border-slate-600/40 px-3 py-1.5 rounded-lg flex items-center gap-1 transition">
                     <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> <span data-i18n="reset"></span>
                 </button>
@@ -259,7 +266,12 @@
                 reportTitle: "বেতন প্রতিবেদন", noEntriesForExport: "কোনো ডাটা নেই, প্রথমে বেতনের তথ্য যোগ করুন।",
                 printHint: "প্রিন্ট ডায়ালগে 'Save as PDF' নির্বাচন করে সেভ করুন।",
                 reportTotalLabel: "সর্বমোট", generatedOn: "তৈরি হয়েছে", reportStudentLabel: "নাম",
-                reportDesignationLabel: "পদবি/শ্রেণি", reportJoiningLabel: "যোগদান/ভর্তির তারিখ", reportTenureLabel: "মেয়াদ"
+                reportDesignationLabel: "পদবি/শ্রেণি", reportJoiningLabel: "যোগদান/ভর্তির তারিখ", reportTenureLabel: "মেয়াদ",
+                backupBtn: "ব্যাকআপ নিন", restoreBtn: "ব্যাকআপ থেকে ফেরান",
+                backupSuccess: "ব্যাকআপ ফাইল ডাউনলোড হয়েছে।",
+                restoreConfirm: "এই ব্যাকআপ ফাইল থেকে ডেটা ফেরালে বর্তমান সব ডেটা মুছে বদলে যাবে। আপনি কি নিশ্চিত?",
+                restoreSuccess: "ব্যাকআপ থেকে ডেটা সফলভাবে ফেরানো হয়েছে।",
+                restoreError: "ফাইলটি সঠিক ব্যাকআপ ফাইল নয়, আবার চেষ্টা করুন।"
             },
             en: {
                 title: "Salary Tracker", reset: "Reset Data", pdfBtn: "Download PDF", docBtn: "Download Word",
@@ -282,7 +294,12 @@
                 reportTitle: "Salary Report", noEntriesForExport: "No data yet, add salary entries first.",
                 printHint: "Choose 'Save as PDF' in the print dialog.",
                 reportTotalLabel: "Grand Total", generatedOn: "Generated on", reportStudentLabel: "Name",
-                reportDesignationLabel: "Designation/Class", reportJoiningLabel: "Joining/Admission Date", reportTenureLabel: "Duration"
+                reportDesignationLabel: "Designation/Class", reportJoiningLabel: "Joining/Admission Date", reportTenureLabel: "Duration",
+                backupBtn: "Backup", restoreBtn: "Restore Backup",
+                backupSuccess: "Backup file downloaded.",
+                restoreConfirm: "Restoring this backup will replace all current data. Are you sure?",
+                restoreSuccess: "Data restored successfully from backup.",
+                restoreError: "This isn't a valid backup file. Please try again."
             }
         };
 
@@ -414,6 +431,66 @@
                 try { localStorage.removeItem(SALARY_KEY); } catch (e) {}
                 renderAll();
             }
+        }
+
+        function downloadBackup() {
+            const t = T[lang()];
+            const backup = {
+                type: 'salary-tracker-backup',
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                profile: profile,
+                salaryData: salaryData
+            };
+            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `salary-backup-${new Date().toISOString().slice(0,10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            alert(t.backupSuccess);
+        }
+
+        function restoreBackup(event) {
+            const t = T[lang()];
+            const file = event.target.files[0];
+            event.target.value = '';
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (!parsed || typeof parsed.salaryData !== 'object') {
+                        alert(t.restoreError);
+                        return;
+                    }
+                    if (!confirm(t.restoreConfirm)) return;
+
+                    salaryData = parsed.salaryData || {};
+                    if (parsed.profile && typeof parsed.profile === 'object') {
+                        profile = Object.assign(profile, parsed.profile);
+                    }
+
+                    await saveSalaryData();
+                    try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); } catch (err) {}
+
+                    document.getElementById('employeeName').value = profile.name || '';
+                    document.getElementById('companyName').value = profile.companyName || '';
+                    document.getElementById('designation').value = profile.designation || '';
+                    document.getElementById('joiningDate').value = profile.joiningDate || '';
+
+                    applyStaticTranslations();
+                    renderAll();
+                    alert(t.restoreSuccess);
+                } catch (err) {
+                    alert(t.restoreError);
+                }
+            };
+            reader.readAsText(file);
         }
 
         function renderAll() {
