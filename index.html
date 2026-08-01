@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>বেতন ট্র্যাকার</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Hind Siliguri', sans-serif; background-color: #0f172a; color: #f8fafc; }
+        .glass-card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+
+        #printArea { display: none; }
+
+        @media print {
+            @page { margin: 14mm 12mm; }
+            body * { visibility: hidden; }
+            #printArea, #printArea * { visibility: visible; }
+            #printArea {
+                display: block;
+                position: absolute;
+                top: 0; left: 0; width: 100%;
+                background: #ffffff; color: #1e293b;
+                font-family: 'Hind Siliguri', sans-serif;
+                padding: 8px 4px;
+            }
+            #printArea .report-header {
+                text-align: center;
+                border-bottom: 3px solid #059669;
+                padding-bottom: 14px;
+                margin-bottom: 18px;
+            }
+            #printArea .college-name {
+                font-size: 27px;
+                font-weight: 700;
+                color: #065f46;
+                letter-spacing: 0.3px;
+                margin-bottom: 5px;
+            }
+            #printArea .report-subtitle {
+                font-size: 12.5px;
+                color: #64748b;
+                text-transform: uppercase;
+                letter-spacing: 2px;
+            }
+            #printArea .info-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 7px 30px;
+                margin-bottom: 18px;
+                font-size: 13px;
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 14px 18px;
+            }
+            #printArea .info-grid .info-item { display: flex; justify-content: space-between; }
+            #printArea .info-grid .info-label {
+                color: #64748b;
+                font-weight: 600;
+            }
+            #printArea .info-grid .info-value { font-weight: 600; color: #0f172a; }
+            #printArea .stats { display: flex; gap: 14px; margin: 18px 0 22px; }
+            #printArea .stat-box {
+                flex: 1;
+                border: 1px solid #d1d5db;
+                border-radius: 10px;
+                padding: 12px 16px;
+                background: #f8fafc;
+                border-left: 4px solid #10b981;
+            }
+            #printArea .stat-label { font-size: 10.5px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+            #printArea .stat-value { font-size: 18px; font-weight: 700; color: #065f46; margin-top: 4px; }
+            #printArea table { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 12.5px; border-radius: 10px; overflow: hidden; }
+            #printArea thead th {
+                background: #059669; color: #ffffff;
+                padding: 10px 14px; text-align: left; font-weight: 600;
+                font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px;
+            }
+            #printArea thead th.text-right, #printArea td.text-right { text-align: right; }
+            #printArea tbody td { padding: 9px 14px; border-bottom: 1px solid #e2e8f0; }
+            #printArea tbody tr:nth-child(even) { background: #f8fafc; }
+            #printArea tfoot td {
+                padding: 11px 14px; font-weight: 700;
+                border-top: 2px solid #059669; background: #ecfdf5; color: #065f46;
+            }
+            #printArea .report-footer { margin-top: 22px; font-size: 10px; color: #94a3b8; text-align: center; }
+        }
+    </style>
+</head>
+<body class="min-h-screen pb-12">
+
+    <header class="border-b border-slate-800 bg-slate-900/80 sticky top-0 z-50 backdrop-blur">
+        <div class="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center flex-wrap gap-3">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-emerald-600/20 text-emerald-400 rounded-xl border border-emerald-500/30">
+                    <i data-lucide="wallet" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 id="pageTitle" class="text-xl font-bold text-white">বেতন ট্র্যাকার</h1>
+                    <p id="jobHeaderLine" class="text-xs text-slate-400"></p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+                <button onclick="toggleLang()" id="langToggleBtn" class="text-xs text-indigo-300 hover:text-indigo-200 bg-indigo-500/10 border border-indigo-500/20 px-3 py-1.5 rounded-lg flex items-center gap-1 transition">
+                    <i data-lucide="languages" class="w-3.5 h-3.5"></i> <span id="langToggleLabel">English</span>
+                </button>
+                <button onclick="downloadPdf()" class="text-xs text-rose-300 hover:text-rose-200 bg-rose-500/10 border border-rose-500/20 px-3 py-1.5 rounded-lg flex items-center gap-1 transition">
+                    <i data-lucide="file-text" class="w-3.5 h-3.5"></i> <span data-i18n="pdfBtn"></span>
+                </button>
+                <button onclick="downloadDoc()" class="text-xs text-blue-300 hover:text-blue-200 bg-blue-500/10 border border-blue-500/20 px-3 py-1.5 rounded-lg flex items-center gap-1 transition">
+                    <i data-lucide="file-type" class="w-3.5 h-3.5"></i> <span data-i18n="docBtn"></span>
+                </button>
+                <button onclick="clearData()" class="text-xs text-slate-300 hover:text-white bg-slate-700/30 border border-slate-600/40 px-3 py-1.5 rounded-lg flex items-center gap-1 transition">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> <span data-i18n="reset"></span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto px-4 mt-8 space-y-8">
+
+        <div id="loadingBanner" class="glass-card p-4 rounded-2xl text-sm text-slate-400 flex items-center gap-2">
+            <i data-lucide="loader" class="w-4 h-4 animate-spin"></i> <span data-i18n="loading"></span>
+        </div>
+
+        <div class="glass-card p-6 rounded-2xl">
+            <h2 class="text-lg font-bold text-white flex items-center gap-2 border-b border-slate-700/60 pb-3 mb-4">
+                <i data-lucide="briefcase" class="w-5 h-5 text-purple-400"></i> <span data-i18n="jobHeading"></span>
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label data-i18n="nameLabel" class="block text-sm font-medium text-slate-300 mb-1"></label>
+                    <input type="text" id="employeeName" data-i18n-placeholder="namePlaceholder" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500">
+                </div>
+                <div>
+                    <label data-i18n="companyLabel" class="block text-sm font-medium text-slate-300 mb-1"></label>
+                    <input type="text" id="companyName" data-i18n-placeholder="companyPlaceholder" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500">
+                </div>
+                <div>
+                    <label data-i18n="designationLabel" class="block text-sm font-medium text-slate-300 mb-1"></label>
+                    <input type="text" id="designation" data-i18n-placeholder="designationPlaceholder" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500">
+                </div>
+                <div>
+                    <label data-i18n="joiningLabel" class="block text-sm font-medium text-slate-300 mb-1"></label>
+                    <input type="date" id="joiningDate" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500">
+                </div>
+            </div>
+            <button onclick="saveProfile()" class="mt-4 bg-purple-600 hover:bg-purple-500 text-white text-sm font-bold py-2.5 px-5 rounded-xl transition flex items-center gap-2">
+                <i data-lucide="check" class="w-4 h-4"></i> <span data-i18n="saveSettings"></span>
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="glass-card p-6 rounded-2xl">
+                <div data-i18n="statTotalEarnedLabel" class="text-xs text-slate-400 font-medium"></div>
+                <div id="statTotalEarned" class="text-3xl font-bold text-emerald-400 mt-2">৳ ০</div>
+                <div id="statTotalEarnedSub" class="text-xs text-slate-500 mt-1"></div>
+            </div>
+            <div class="glass-card p-6 rounded-2xl">
+                <div data-i18n="statLatestSalaryLabel" class="text-xs text-slate-400 font-medium"></div>
+                <div id="statLatestSalary" class="text-3xl font-bold text-white mt-2">৳ ০</div>
+                <div id="statLatestMonth" class="text-xs text-slate-500 mt-1"></div>
+            </div>
+            <div class="glass-card p-6 rounded-2xl">
+                <div data-i18n="statTenureLabel" class="text-xs text-slate-400 font-medium"></div>
+                <div id="statTenure" class="text-3xl font-bold text-indigo-400 mt-2">-</div>
+                <div id="statTenureSub" class="text-xs text-slate-500 mt-1"></div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="glass-card p-6 rounded-2xl space-y-4">
+                <h2 class="text-lg font-bold text-white flex items-center gap-2 border-b border-slate-700/60 pb-3">
+                    <i data-lucide="plus-circle" class="w-5 h-5 text-emerald-400"></i> <span data-i18n="formHeading"></span>
+                </h2>
+                <form id="salaryForm" onsubmit="addSalary(event)" class="space-y-4">
+                    <div>
+                        <label data-i18n="monthLabel" class="block text-sm font-medium text-slate-300 mb-1"></label>
+                        <input type="month" id="salaryMonth" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <label data-i18n="salaryLabel" class="block text-sm font-medium text-slate-300 mb-1"></label>
+                        <div class="relative">
+                            <input type="number" id="salaryAmount" placeholder="৫০০০০" required min="0" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-lg font-bold text-emerald-400 focus:outline-none focus:border-emerald-500">
+                            <span class="absolute right-4 top-3 text-slate-500 font-bold">৳</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label data-i18n="noteLabel" class="block text-sm font-medium text-slate-300 mb-1"></label>
+                        <input type="text" id="salaryNote" data-i18n-placeholder="notePlaceholder" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-300 focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <button type="submit" id="submitBtn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition shadow-lg flex items-center justify-center gap-2">
+                        <i data-lucide="save" class="w-4 h-4"></i> <span data-i18n="saveBtn"></span>
+                    </button>
+                </form>
+            </div>
+
+            <div class="lg:col-span-2 glass-card p-6 rounded-2xl flex flex-col justify-between">
+                <h2 class="text-lg font-bold text-white flex items-center gap-2 mb-4">
+                    <i data-lucide="trending-up" class="w-5 h-5 text-indigo-400"></i> <span data-i18n="chartHeading"></span>
+                </h2>
+                <div class="relative h-64 w-full">
+                    <canvas id="salaryChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-card p-6 rounded-2xl">
+            <h2 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <i data-lucide="list" class="w-5 h-5 text-blue-400"></i> <span data-i18n="historyHeading"></span>
+            </h2>
+            <div class="overflow-x-auto rounded-xl border border-slate-800">
+                <table class="w-full text-sm text-left text-slate-300">
+                    <thead class="text-xs text-slate-300 uppercase tracking-wide bg-emerald-600/20 border-b border-emerald-500/30">
+                        <tr>
+                            <th class="px-4 py-3" data-i18n="thMonthYear"></th>
+                            <th class="px-4 py-3 text-right" data-i18n="thSalary"></th>
+                            <th class="px-4 py-3" data-i18n="thNote"></th>
+                            <th class="px-4 py-3 text-right" data-i18n="thAction"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyTableBody" class="divide-y divide-slate-800/60"></tbody>
+                    <tfoot id="historyTableFoot" class="border-t-2 border-emerald-600/40 bg-emerald-600/10 font-bold"></tfoot>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <div id="printArea"></div>
+
+    <script>
+        lucide.createIcons();
+
+        const T = {
+            bn: {
+                title: "বেতন ট্র্যাকার", reset: "রিসেট ডাটা", pdfBtn: "PDF ডাউনলোড", docBtn: "Word ডাউনলোড",
+                jobHeading: "চাকরির তথ্য", nameLabel: "আপনার নাম", namePlaceholder: "যেমন: রহিম উদ্দিন",
+                companyLabel: "কলেজের নাম", companyPlaceholder: "যেমন: ঢাকা কলেজ",
+                designationLabel: "পদবি", designationPlaceholder: "যেমন: সফটওয়্যার ইঞ্জিনিয়ার",
+                joiningLabel: "যোগদানের তারিখ", saveSettings: "সেভ করুন",
+                statTotalEarnedLabel: "যোগদান থেকে মোট আয়", statLatestSalaryLabel: "সর্বশেষ মাসের বেতন",
+                statTenureLabel: "চাকরির মেয়াদ", noData: "কোনো ডাটা নেই",
+                formHeading: "নতুন বেতনের তথ্য দিন", monthLabel: "বছর ও মাস নির্বাচন করুন",
+                salaryLabel: "মাসিক বেতন (টাকা)", noteLabel: "নোট / মন্তব্য (ঐচ্ছিক)",
+                notePlaceholder: "ইনক্রিমেন্ট / বোনাসসহ", saveBtn: "সেভ করুন",
+                chartHeading: "বেতনের গ্রাফ", historyHeading: "সব মাসের রেকর্ড",
+                thMonthYear: "মাস ও বছর", thSalary: "বেতন", thNote: "নোট", thAction: "অ্যাকশন",
+                noEntries: "কোনো তথ্য নেই", monthsEntered: "মাসের তথ্য দেওয়া হয়েছে",
+                loading: "ডাটা লোড হচ্ছে...", confirmDelete: "আপনি কি এই মাসের ডাটা মুছে ফেলতে চান?",
+                confirmReset: "আপনার সব সংরক্ষিত তথ্য মুছে যাবে! আপনি কি নিশ্চিত?",
+                saveError: "সংরক্ষণ করা যায়নি, আবার চেষ্টা করুন।",
+                yearsSuffix: "বছর", monthsSuffix: "মাস", since: "থেকে", switchTo: "English", notJoined: "যোগদানের তারিখ যোগ করুন",
+                reportTitle: "বেতন প্রতিবেদন", noEntriesForExport: "কোনো ডাটা নেই, প্রথমে বেতনের তথ্য যোগ করুন।",
+                printHint: "প্রিন্ট ডায়ালগে 'Save as PDF' নির্বাচন করে সেভ করুন।",
+                reportTotalLabel: "সর্বমোট", generatedOn: "তৈরি হয়েছে", reportStudentLabel: "নাম",
+                reportDesignationLabel: "পদবি/শ্রেণি", reportJoiningLabel: "যোগদান/ভর্তির তারিখ", reportTenureLabel: "মেয়াদ"
+            },
+            en: {
+                title: "Salary Tracker", reset: "Reset Data", pdfBtn: "Download PDF", docBtn: "Download Word",
+                jobHeading: "Job Details", nameLabel: "Your Name", namePlaceholder: "e.g. Rahim Uddin",
+                companyLabel: "College Name", companyPlaceholder: "e.g. Dhaka College",
+                designationLabel: "Designation", designationPlaceholder: "e.g. Software Engineer",
+                joiningLabel: "Joining Date", saveSettings: "Save",
+                statTotalEarnedLabel: "Total Earned Since Joining", statLatestSalaryLabel: "Latest Month's Salary",
+                statTenureLabel: "Job Tenure", noData: "No data yet",
+                formHeading: "Add New Salary Entry", monthLabel: "Select Month & Year",
+                salaryLabel: "Monthly Salary (Taka)", noteLabel: "Note (optional)",
+                notePlaceholder: "Increment / with bonus", saveBtn: "Save",
+                chartHeading: "Salary Chart", historyHeading: "All Monthly Records",
+                thMonthYear: "Month & Year", thSalary: "Salary", thNote: "Note", thAction: "Action",
+                noEntries: "No entries yet", monthsEntered: "months recorded",
+                loading: "Loading data...", confirmDelete: "Delete this month's data?",
+                confirmReset: "All your saved data will be deleted! Are you sure?",
+                saveError: "Could not save. Please try again.",
+                yearsSuffix: "yrs", monthsSuffix: "mo", since: "since", switchTo: "বাংলা", notJoined: "Add your joining date",
+                reportTitle: "Salary Report", noEntriesForExport: "No data yet, add salary entries first.",
+                printHint: "Choose 'Save as PDF' in the print dialog.",
+                reportTotalLabel: "Grand Total", generatedOn: "Generated on", reportStudentLabel: "Name",
+                reportDesignationLabel: "Designation/Class", reportJoiningLabel: "Joining/Admission Date", reportTenureLabel: "Duration"
+            }
+        };
+
+        const monthNames = {
+            bn: ["জানুয়ারি","ফেব্রুয়ারি","মার্চ","এপ্রিল","মে","জুন","জুলাই","আগস্ট","সেপ্টেম্বর","অক্টোবর","নভেম্বর","ডিসেম্বর"],
+            en: ["January","February","March","April","May","June","July","August","September","October","November","December"]
+        };
+
+        const SALARY_KEY = 'salaryData';
+        const PROFILE_KEY = 'job-profile';
+
+        let salaryData = {};
+        let profile = { lang: 'bn', name: '', companyName: '', designation: '', joiningDate: '' };
+        let chartInstance = null;
+        let dataLoaded = false;
+
+        function lang() { return profile.lang === 'en' ? 'en' : 'bn'; }
+        function toBnDigits(num) {
+            const d = ['০','১','২','৩','৪','৫','৬','৭','৮','৯'];
+            return num.toString().replace(/\d/g, x => d[x]);
+        }
+        function toDigits(val) { return lang() === 'bn' ? toBnDigits(val) : val.toString(); }
+        function formatMoney(amount) {
+            const rounded = Math.round(amount || 0);
+            return '৳ ' + toDigits(rounded.toLocaleString('en-US'));
+        }
+        function mName(idx) { return monthNames[lang()][idx]; }
+
+        function applyStaticTranslations() {
+            const t = T[lang()];
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (t[key] !== undefined) el.textContent = t[key];
+            });
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+                const key = el.getAttribute('data-i18n-placeholder');
+                if (t[key] !== undefined) el.setAttribute('placeholder', t[key]);
+            });
+            document.getElementById('pageTitle').textContent = t.title;
+            document.getElementById('langToggleLabel').textContent = t.switchTo;
+            document.title = t.title;
+            document.documentElement.lang = lang();
+            const jobLine = [profile.name, profile.designation, profile.companyName].filter(Boolean).join(' · ');
+            document.getElementById('jobHeaderLine').textContent = jobLine;
+        }
+
+        async function toggleLang() {
+            profile.lang = lang() === 'bn' ? 'en' : 'bn';
+            try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); } catch (e) {}
+            applyStaticTranslations();
+            renderAll();
+        }
+
+        async function loadData() {
+            try {
+                const raw = localStorage.getItem(SALARY_KEY);
+                salaryData = raw ? JSON.parse(raw) : {};
+            } catch (e) { salaryData = {}; }
+
+            try {
+                const rawP = localStorage.getItem(PROFILE_KEY);
+                if (rawP) profile = Object.assign(profile, JSON.parse(rawP));
+            } catch (e) {}
+
+            document.getElementById('employeeName').value = profile.name || '';
+            document.getElementById('companyName').value = profile.companyName || '';
+            document.getElementById('designation').value = profile.designation || '';
+            document.getElementById('joiningDate').value = profile.joiningDate || '';
+
+            dataLoaded = true;
+            document.getElementById('loadingBanner').style.display = 'none';
+            applyStaticTranslations();
+            renderAll();
+        }
+
+        async function saveSalaryData() {
+            try {
+                localStorage.setItem(SALARY_KEY, JSON.stringify(salaryData));
+            } catch (e) {
+                console.error(e);
+                alert(T[lang()].saveError);
+            }
+        }
+
+        async function saveProfile() {
+            profile.name = document.getElementById('employeeName').value.trim();
+            profile.companyName = document.getElementById('companyName').value.trim();
+            profile.designation = document.getElementById('designation').value.trim();
+            profile.joiningDate = document.getElementById('joiningDate').value;
+            try {
+                localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+            } catch (e) {
+                alert(T[lang()].saveError);
+            }
+            applyStaticTranslations();
+            renderAll();
+        }
+
+        async function addSalary(e) {
+            e.preventDefault();
+            const monthVal = document.getElementById('salaryMonth').value;
+            const amountVal = parseFloat(document.getElementById('salaryAmount').value);
+            const noteVal = document.getElementById('salaryNote').value;
+            if (!monthVal || isNaN(amountVal)) return;
+
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+
+            salaryData[monthVal] = { amount: amountVal, note: noteVal };
+            await saveSalaryData();
+
+            document.getElementById('salaryAmount').value = '';
+            document.getElementById('salaryNote').value = '';
+            submitBtn.disabled = false;
+            renderAll();
+        }
+
+        async function deleteEntry(key) {
+            if (confirm(T[lang()].confirmDelete)) {
+                delete salaryData[key];
+                await saveSalaryData();
+                renderAll();
+            }
+        }
+
+        async function clearData() {
+            if (confirm(T[lang()].confirmReset)) {
+                salaryData = {};
+                try { localStorage.removeItem(SALARY_KEY); } catch (e) {}
+                renderAll();
+            }
+        }
+
+        function renderAll() {
+            if (!dataLoaded) return;
+            renderStats();
+            renderHistoryTable();
+            renderChart();
+            lucide.createIcons();
+        }
+
+        function tenureString() {
+            const t = T[lang()];
+            if (!profile.joiningDate) return { main: '-', sub: t.notJoined };
+            const join = new Date(profile.joiningDate);
+            const now = new Date();
+            let months = (now.getFullYear() - join.getFullYear()) * 12 + (now.getMonth() - join.getMonth());
+            if (now.getDate() < join.getDate()) months--;
+            if (months < 0) months = 0;
+            const years = Math.floor(months / 12);
+            const remMonths = months % 12;
+            let tenureStr = '';
+            if (years > 0) tenureStr += `${toDigits(years)} ${t.yearsSuffix} `;
+            tenureStr += `${toDigits(remMonths)} ${t.monthsSuffix}`;
+            const jm = join.getMonth(), jd = join.getDate(), jy = join.getFullYear();
+            return { main: tenureStr, sub: `${t.since} ${mName(jm)} ${toDigits(jd)}, ${toDigits(jy)}` };
+        }
+
+        function renderStats() {
+            const t = T[lang()];
+            const keys = Object.keys(salaryData).sort();
+
+            const totalEarned = keys.reduce((acc, k) => acc + (salaryData[k].amount || 0), 0);
+            document.getElementById('statTotalEarned').innerText = formatMoney(totalEarned);
+            document.getElementById('statTotalEarnedSub').innerText = keys.length ? `${toDigits(keys.length)} ${t.monthsEntered}` : t.noData;
+
+            if (keys.length === 0) {
+                document.getElementById('statLatestSalary').innerText = '৳ ' + toDigits(0);
+                document.getElementById('statLatestMonth').innerText = t.noData;
+            } else {
+                const latestKey = keys[keys.length - 1];
+                const [y, m] = latestKey.split('-');
+                document.getElementById('statLatestSalary').innerText = formatMoney(salaryData[latestKey].amount);
+                document.getElementById('statLatestMonth').innerText = `${mName(parseInt(m)-1)} ${toDigits(y)}`;
+            }
+
+            const tenure = tenureString();
+            document.getElementById('statTenure').innerText = tenure.main;
+            document.getElementById('statTenureSub').innerText = tenure.sub;
+        }
+
+        function renderHistoryTable() {
+            const t = T[lang()];
+            const tbody = document.getElementById('historyTableBody');
+            const tfoot = document.getElementById('historyTableFoot');
+            tbody.innerHTML = '';
+            tfoot.innerHTML = '';
+
+            const keys = Object.keys(salaryData).sort().reverse();
+            if (keys.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-6 text-center text-slate-500">${t.noEntries}</td></tr>`;
+                return;
+            }
+
+            keys.forEach((k, idx) => {
+                const [year, month] = k.split('-');
+                const item = salaryData[k];
+                const tr = document.createElement('tr');
+                tr.className = (idx % 2 === 1 ? 'bg-slate-900/40 ' : '') + 'hover:bg-emerald-500/5 transition';
+                tr.innerHTML = `
+                    <td class="px-4 py-3 font-medium text-white">${mName(parseInt(month)-1)} ${toDigits(year)}</td>
+                    <td class="px-4 py-3 font-bold text-emerald-400 text-right">${formatMoney(item.amount)}</td>
+                    <td class="px-4 py-3 text-slate-400">${item.note || '-'}</td>
+                    <td class="px-4 py-3 text-right">
+                        <button onclick="deleteEntry('${k}')" class="text-rose-400 hover:text-rose-300 p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 transition">
+                            <i data-lucide="trash" class="w-4 h-4"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            const total = keys.reduce((acc, k) => acc + (salaryData[k].amount || 0), 0);
+            tfoot.innerHTML = `
+                <tr>
+                    <td class="px-4 py-3 text-emerald-300">${t.reportTotalLabel}</td>
+                    <td class="px-4 py-3 text-right text-emerald-300">${formatMoney(total)}</td>
+                    <td class="px-4 py-3" colspan="2"></td>
+                </tr>
+            `;
+        }
+
+        function renderChart() {
+            const ctx = document.getElementById('salaryChart').getContext('2d');
+            const keys = Object.keys(salaryData).sort();
+            if (chartInstance) chartInstance.destroy();
+
+            const labels = keys.map(k => {
+                const [y, m] = k.split('-');
+                return `${mName(parseInt(m)-1)} '${toDigits(y.slice(2))}`;
+            });
+            const data = keys.map(k => salaryData[k].amount);
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: T[lang()].thSalary,
+                        data: data,
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.3,
+                        pointBackgroundColor: '#34d399',
+                        pointRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                        y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8', callback: function(val) { return '৳' + val.toLocaleString(); } } }
+                    }
+                }
+            });
+        }
+
+        function buildReportHtml() {
+            const t = T[lang()];
+            const keys = Object.keys(salaryData).sort().reverse();
+            const totalEarned = Object.keys(salaryData).reduce((acc, k) => acc + (salaryData[k].amount || 0), 0);
+            const tenure = tenureString();
+
+            let infoItems = '';
+            if (profile.name) infoItems += `<div class="info-item"><span class="info-label">${t.reportStudentLabel}</span><span class="info-value">${profile.name}</span></div>`;
+            if (profile.designation) infoItems += `<div class="info-item"><span class="info-label">${t.reportDesignationLabel}</span><span class="info-value">${profile.designation}</span></div>`;
+            if (profile.joiningDate) infoItems += `<div class="info-item"><span class="info-label">${t.reportJoiningLabel}</span><span class="info-value">${profile.joiningDate}</span></div>`;
+            infoItems += `<div class="info-item"><span class="info-label">${t.reportTenureLabel}</span><span class="info-value">${tenure.main}</span></div>`;
+
+            let rows = '';
+            if (keys.length === 0) {
+                rows = `<tr><td colspan="3" style="text-align:center;color:#888;">${t.noEntriesForExport}</td></tr>`;
+            } else {
+                keys.forEach(k => {
+                    const [year, month] = k.split('-');
+                    const item = salaryData[k];
+                    rows += `<tr>
+                        <td>${mName(parseInt(month)-1)} ${toDigits(year)}</td>
+                        <td class="text-right">${formatMoney(item.amount)}</td>
+                        <td>${item.note || '-'}</td>
+                    </tr>`;
+                });
+            }
+
+            const now = new Date();
+            const genDate = `${toDigits(now.getDate())} ${mName(now.getMonth())} ${toDigits(now.getFullYear())}`;
+            const collegeName = profile.companyName || t.title;
+
+            return `
+                <div class="report-header">
+                    <div class="college-name">${collegeName}</div>
+                    <div class="report-subtitle">${t.reportTitle}</div>
+                </div>
+                <div class="info-grid">${infoItems}</div>
+                <div class="stats">
+                    <div class="stat-box">
+                        <div class="stat-label">${t.statTotalEarnedLabel}</div>
+                        <div class="stat-value">${formatMoney(totalEarned)}</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-label">${t.statLatestSalaryLabel}</div>
+                        <div class="stat-value">${keys.length ? formatMoney(salaryData[keys[0]].amount) : formatMoney(0)}</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-label">${t.statTenureLabel}</div>
+                        <div class="stat-value">${tenure.main}</div>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr><th>${t.thMonthYear}</th><th class="text-right">${t.thSalary}</th><th>${t.thNote}</th></tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                    ${keys.length ? `<tfoot><tr><td>${t.reportTotalLabel}</td><td class="text-right">${formatMoney(totalEarned)}</td><td></td></tr></tfoot>` : ''}
+                </table>
+                <div class="report-footer">${t.generatedOn} ${genDate} &middot; ${collegeName}</div>
+            `;
+        }
+
+        function downloadPdfDirect() {
+            const t = T[lang()];
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const centerX = pageWidth / 2;
+
+            const tenure = tenureString();
+            const keys = Object.keys(salaryData).sort();
+            const totalEarned = keys.reduce((acc, k) => acc + (salaryData[k].amount || 0), 0);
+            const collegeName = profile.companyName || t.title;
+
+            // Header: college name as heading, centered, with underline
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(20);
+            doc.setTextColor(6, 95, 70);
+            doc.text(collegeName, centerX, 20, { align: 'center' });
+
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(10.5);
+            doc.setTextColor(100);
+            doc.text(t.reportTitle.toUpperCase(), centerX, 27, { align: 'center' });
+
+            doc.setDrawColor(5, 150, 105);
+            doc.setLineWidth(0.8);
+            doc.line(14, 32, pageWidth - 14, 32);
+
+            // Info block
+            let y = 41;
+            doc.setFontSize(10);
+            doc.setTextColor(60);
+            const detailLines = [];
+            if (profile.name) detailLines.push(`${t.reportStudentLabel}: ${profile.name}`);
+            if (profile.designation) detailLines.push(`${t.reportDesignationLabel}: ${profile.designation}`);
+            if (profile.joiningDate) detailLines.push(`${t.reportJoiningLabel}: ${profile.joiningDate}`);
+            detailLines.push(`${t.reportTenureLabel}: ${tenure.main}`);
+            detailLines.forEach((line, i) => {
+                const col = i % 2 === 0 ? 14 : centerX + 5;
+                const row = Math.floor(i / 2);
+                doc.text(line, col, y + row * 6);
+            });
+            y += Math.ceil(detailLines.length / 2) * 6 + 8;
+
+            // Stat boxes
+            const boxW = (pageWidth - 28 - 12) / 3;
+            const stats = [
+                [t.statTotalEarnedLabel, formatMoney(totalEarned)],
+                [t.statLatestSalaryLabel, keys.length ? formatMoney(salaryData[keys[keys.length-1]].amount) : formatMoney(0)],
+                [t.statTenureLabel, tenure.main]
+            ];
+            stats.forEach((s, i) => {
+                const x = 14 + i * (boxW + 6);
+                doc.setFillColor(248, 250, 252);
+                doc.setDrawColor(209, 213, 219);
+                doc.roundedRect(x, y, boxW, 20, 2, 2, 'FD');
+                doc.setDrawColor(16, 185, 129);
+                doc.setLineWidth(1.2);
+                doc.line(x, y + 1, x, y + 19);
+                doc.setFontSize(8);
+                doc.setTextColor(100);
+                doc.text(s[0], x + 5, y + 7);
+                doc.setFontSize(12);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(6, 95, 70);
+                doc.text(s[1], x + 5, y + 15);
+                doc.setFont('helvetica', 'normal');
+            });
+            y += 30;
+
+            const rows = keys.slice().reverse().map(k => {
+                const [year, month] = k.split('-');
+                const item = salaryData[k];
+                return [`${mName(parseInt(month)-1)} ${year}`, formatMoney(item.amount), item.note || '-'];
+            });
+
+            doc.autoTable({
+                startY: y,
+                head: [[t.thMonthYear, t.thSalary, t.thNote]],
+                body: rows.length ? rows : [[t.noEntriesForExport, '', '']],
+                foot: rows.length ? [[t.reportTotalLabel, formatMoney(totalEarned), '']] : undefined,
+                headStyles: { fillColor: [5, 150, 105], textColor: 255, fontStyle: 'bold' },
+                footStyles: { fillColor: [236, 253, 245], textColor: [6, 95, 70], fontStyle: 'bold' },
+                alternateRowStyles: { fillColor: [248, 250, 252] },
+                columnStyles: { 1: { halign: 'right' } },
+                styles: { fontSize: 9, cellPadding: 4 }
+            });
+
+            const finalY = doc.lastAutoTable.finalY + 10;
+            doc.setFontSize(8.5);
+            doc.setTextColor(150);
+            const genDate = new Date().toLocaleDateString();
+            doc.text(`${t.generatedOn} ${genDate} · ${collegeName}`, centerX, finalY, { align: 'center' });
+
+            doc.save(`salary-report-${new Date().toISOString().slice(0,10)}.pdf`);
+        }
+
+        function downloadPdfViaPrint() {
+            const t = T[lang()];
+            document.getElementById('printArea').innerHTML = buildReportHtml();
+            alert(t.printHint);
+            window.print();
+        }
+
+        function downloadPdf() {
+            if (lang() === 'en') {
+                downloadPdfDirect();
+            } else {
+                downloadPdfViaPrint();
+            }
+        }
+
+        function downloadDoc() {
+            const t = T[lang()];
+            const bodyHtml = buildReportHtml();
+            const fullHtml = `
+                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+                <head>
+                    <meta charset="utf-8">
+                    <title>${t.reportTitle}</title>
+                    <style>
+                        body { font-family: 'Nirmala UI', 'Hind Siliguri', Arial, sans-serif; color: #1e293b; }
+                        .report-header { text-align: center; border-bottom: 3px solid #059669; padding-bottom: 12px; margin-bottom: 18px; }
+                        .college-name { font-size: 24px; font-weight: 700; color: #065f46; margin-bottom: 4px; }
+                        .report-subtitle { font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 1.5px; }
+                        .info-grid { margin-bottom: 18px; font-size: 12.5px; background: #f8fafc; border: 1px solid #ddd; padding: 12px 16px; }
+                        .info-item { display: inline-block; width: 48%; margin-bottom: 4px; }
+                        .info-label { color: #64748b; font-weight: 600; margin-right: 6px; }
+                        .info-value { font-weight: 600; color: #0f172a; }
+                        .stats { margin: 16px 0 20px; }
+                        .stat-box { display: inline-block; border: 1px solid #ccc; padding: 8px 14px; margin-right: 10px; border-left: 4px solid #10b981; background: #f8fafc; }
+                        .stat-label { font-size: 11px; color: #666; text-transform: uppercase; }
+                        .stat-value { font-size: 15px; font-weight: bold; color: #065f46; }
+                        table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+                        th, td { border: 1px solid #999; padding: 7px 10px; font-size: 12px; text-align: left; }
+                        th { background: #059669; color: #ffffff; }
+                        td.text-right, th.text-right { text-align: right; }
+                        tfoot td { background: #ecfdf5; color: #065f46; font-weight: bold; }
+                        .report-footer { margin-top: 16px; font-size: 10px; color: #94a3b8; text-align: center; }
+                    </style>
+                </head>
+                <body>${bodyHtml}</body>
+                </html>
+            `;
+            const blob = new Blob(['\ufeff', fullHtml], { type: 'application/msword' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `salary-report-${new Date().toISOString().slice(0,10)}.doc`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        window.addEventListener('afterprint', () => {
+            document.getElementById('printArea').innerHTML = '';
+        });
+
+        const today = new Date();
+        const curM = (today.getMonth() + 1).toString().padStart(2, '0');
+        document.getElementById('salaryMonth').value = `${today.getFullYear()}-${curM}`;
+
+        loadData();
+    </script>
+</body>
+</html>
